@@ -5,6 +5,9 @@ import h5py
 
 from allennlp.models.archival import load_archive
 from kb.common import JsonFile
+import simplejson as json
+import kb.kg_embedding
+
 
 
 # includes @@PADDING@@, @@UNKNOWN@@, @@MASK@@, @@NULL@@
@@ -33,7 +36,11 @@ def extract_tucker_embeddings(tucker_archive, vocab_file, tucker_hdf5):
 
     # get embeddings
     embed = archive.model.kg_tuple_predictor.entities.weight.detach().numpy()
+    print(f'embed.shape {embed.shape}')
+    print(embed[0])
     out_embeddings = np.zeros((NUM_EMBEDDINGS, embed.shape[1]))
+    
+    print(f'out_embeddings.shape {out_embeddings.shape}')
 
     vocab = archive.model.vocab
 
@@ -47,6 +54,7 @@ def extract_tucker_embeddings(tucker_archive, vocab_file, tucker_hdf5):
             # k = 0 is @@UNKNOWN@@, and want it at index 1 in output
             out_embeddings[k + 1, :] = embed[embed_id, :]
 
+    print(out_embeddings[0])
     # write out to file
     with h5py.File(tucker_hdf5, 'w') as fout:
         ds = fout.create_dataset('tucker', data=out_embeddings)

@@ -6,6 +6,7 @@ from allennlp.common import Params
 import torch
 
 if __name__ == '__main__':
+    # a pretrained model, e.g. for Wordnet+Wikipedia
     archive_file = 'https://allennlp.s3-us-west-2.amazonaws.com/knowbert/models/knowbert_wiki_wordnet_model.tar.gz'
     params = Params({"archive_file": archive_file})
 
@@ -16,6 +17,9 @@ if __name__ == '__main__':
     sentences = ["Paris is located in [MASK].", "La Mauricie National Park is located in [MASK]."]
 
     mask_id = batcher.tokenizer_and_candidate_generator.bert_tokenizer.vocab['[MASK]']
+
+    # batcher takes raw untokenized sentences
+    # and yields batches of tensors needed to run KnowBert
     for batch in batcher.iter_batches(sentences):
         model_output = model(**batch)
         token_mask = batch['tokens']['tokens'] == mask_id

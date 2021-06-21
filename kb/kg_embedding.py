@@ -13,6 +13,8 @@ from allennlp.nn.regularizers import RegularizerApplicator
 from allennlp.models import Model
 from allennlp.common import Registrable
 
+import wget
+
 
 @DatasetReader.register("kg_tuple")
 class KGTupleReader(DatasetReader):
@@ -61,9 +63,22 @@ class KGTupleReader(DatasetReader):
         full_graph = {}
         instances = OrderedDict()
 
+        # print(f'files len {len(files)}')
         for fname, should_create_instance in zip(files, include_as_instance):
+            print(f'fname {fname}')
+            if fname[:4] == "http":
+                fname= fname.split("/")[-1]
+            # local_fname = fname
+            # if fname[:4] == "http":
+            #     # Make http request for remote file data
+            #     local_fname = fname.split("/")[-1]
+            #     print(f'local fname: {local_fname}')
+            #     wget.download(fname, local_fname)
+            # print(f'local fname: {local_fname}')
             with open(fname, 'r') as fin:
+            # with open(fname, 'r') as fin:
                 for line in fin:
+
                     e1, r, e2 = [ele.strip() for ele in line.strip().split('\t')]
                     if (e1, r) not in full_graph:
                         full_graph[(e1, r)] = set()
