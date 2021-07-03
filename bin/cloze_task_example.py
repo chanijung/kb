@@ -30,7 +30,7 @@ if __name__ == '__main__':
         )
 
         mask_token_probabilities = prediction_scores.masked_select(token_mask.unsqueeze(-1)).view(-1, prediction_scores.shape[-1])  # (num_masked_tokens, vocab_size)
-
+        print(torch.sum(mask_token_probabilities>0))
         predicted_token_ids = mask_token_probabilities.argmax(dim=-1)
 
         predicted_tokens = [batcher.tokenizer_and_candidate_generator.bert_tokenizer.ids_to_tokens[int(i)]

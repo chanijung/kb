@@ -7,6 +7,7 @@ from allennlp.models.archival import load_archive
 from kb.common import JsonFile
 import simplejson as json
 import kb.kg_embedding
+from nltk.corpus import wordnet as wn
 
 
 
@@ -37,12 +38,13 @@ def extract_tucker_embeddings(tucker_archive, vocab_file, tucker_hdf5):
     # get embeddings
     embed = archive.model.kg_tuple_predictor.entities.weight.detach().numpy()
     print(f'embed.shape {embed.shape}')
-    print(embed[0])
+    # print(embed[0])
     out_embeddings = np.zeros((NUM_EMBEDDINGS, embed.shape[1]))
     
     print(f'out_embeddings.shape {out_embeddings.shape}')
 
     vocab = archive.model.vocab
+
 
     for k, entity in enumerate(vocab_list):
         embed_id = vocab.get_token_index(entity, 'entity')
@@ -58,6 +60,51 @@ def extract_tucker_embeddings(tucker_archive, vocab_file, tucker_hdf5):
     # write out to file
     with h5py.File(tucker_hdf5, 'w') as fout:
         ds = fout.create_dataset('tucker', data=out_embeddings)
+
+
+def debias_tucker_embeddings(tucker_archive, tucker_hdf5, vocab_file):
+    #Get tucker embeddings numpy array
+    with h5py.File(tucker_hdf5, 'r') as fin:
+        tucker = fin['tucker'][...]
+
+    #Get list of words in vocabulary
+    with open(vocab_file, 'r') as fin:
+        vocab_list = fin.read().strip().split('\n')
+
+    #Extract gender directional vectors
+    archive = load_archive(tucker_archive)
+    vocab = archive.model.vocab
+    gender_dir_vecs = []
+    for info in ["n.01", "n.02", "a.01", "s.02", "s.03"]:
+        id1 = vocab.get_token_index('female.'+info, 'entity')
+        id2 = vocab.get_token_index('male.'+info, 'entity')
+        gender_dir_vecs.append(tucker[id1+1, :]-tucker[id2+1,:])
+    lambdas = [0.5]*5   #Parameters which decide the amount of debiasing
+
+    #Debias tucker embeddings of occupation words
+    occ = open("bin/professions.txt", "r")
+    num_debiased_word = 0
+    num_debiased_embeddings = 0
+    for line in occ.readlines():
+        entities = [w for w in vocab_list if w.startswith(line.strip()+".n.")]
+        if len(entities)>0:
+            num_debiased_word += 1
+        for entity in entities: #For each entity corresponding to each occupation
+            id = vocab.get_token_index(entity, 'entity')
+            # print(f'entity {entity}, id {id}')
+            if id<0 or id>=NUM_EMBEDDINGS:
+                continue
+            num_debiased_embeddings += 1
+            for i in range(len(gender_dir_vecs)):  #Debias the embedding
+                gdv = gender_dir_vecs[i]
+                lam = lambdas[i]
+                tucker[id+1, :] = tucker[id+1, :] - lam * np.dot(tucker[id+1, :], gdv) / np.linalg.norm(gdv)
+    print(f'debiased {num_debiased_word} words, {num_debiased_embeddings} embeddings')
+
+    #Write to the new embeddings file.
+    with h5py.File('bin/debiased_tucker_embeddings.hdf5', 'w') as fout:
+        ds = fout.create_dataset('tucker', data=tucker)
+            
 
 
 def get_gensen_synset_definitions(entity_file, vocab_file, gensen_file):
@@ -131,6 +178,8 @@ if __name__ == '__main__':
     parser.add_argument('--tucker_archive_file', type=str)
     parser.add_argument('--tucker_hdf5_file', type=str)
 
+    parser.add_argument('--debias_tucker', default=False, action="store_true")
+
     parser.add_argument('--combine_tucker_gensen', default=False, action="store_true")
     parser.add_argument('--all_embeddings_file', type=str)
 
@@ -145,6 +194,8 @@ if __name__ == '__main__':
         extract_tucker_embeddings(args.tucker_archive_file, args.vocab_file, args.tucker_hdf5_file)
     elif args.combine_tucker_gensen:
         combine_tucker_gensen(args.tucker_hdf5_file, args.gensen_file, args.all_embeddings_file)
+    elif args.debias_tucker:
+        debias_tucker_embeddings(args.tucker_archive_file, args.tucker_hdf5_file, args.vocab_file)
     else:
         raise ValueError
 
